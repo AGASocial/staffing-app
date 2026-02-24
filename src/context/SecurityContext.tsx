@@ -18,31 +18,23 @@ export function SecurityProvider({ children }: { children: React.ReactNode }) {
         locked: boolean;
         loading: boolean;
     }>({
-        hasPin: false,
-        locked: true,
-        loading: true,
+        hasPin: true,
+        locked: false,
+        loading: false,
     });
     const pathname = usePathname();
 
     const checkStatus = useCallback(async () => {
         try {
-            const res = await fetch("/api/security/check-session");
-            if (res.ok) {
-                const data = await res.json();
-                // data: { authenticated, hasPin, locked }
-                if (data.authenticated) {
-                    setState({
-                        hasPin: data.hasPin,
-                        locked: data.locked,
-                        loading: false
-                    });
-                } else {
-                    // Not authenticated, irrelevant
-                    setState({ hasPin: false, locked: false, loading: false });
-                }
-            } else {
-                setState(prev => ({ ...prev, loading: false }));
-            }
+            // const res = await fetch("/api/security/check-session");
+            // if (res.ok) {
+            //     const data = await res.json();
+            // }
+            setState({
+                hasPin: true,
+                locked: false,
+                loading: false
+            });
         } catch (error) {
             console.error("Failed to check security status", error);
             setState(prev => ({ ...prev, loading: false }));

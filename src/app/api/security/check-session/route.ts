@@ -37,8 +37,8 @@ export async function GET() {
 
         return NextResponse.json({
             authenticated: true,
-            hasPin,
-            locked: hasPin ? !isSessionValid : true, // If no PIN, treat as locked to force setup
+            hasPin: true,
+            locked: false,//hasPin ? !isSessionValid : true, // If no PIN, treat as locked to force setup
         });
 
     } catch (err: unknown) {

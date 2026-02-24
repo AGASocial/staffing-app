@@ -19,8 +19,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "iablee - Digital Inheritance Platform",
-  description: "Secure and manage your digital legacy with iablee",
+  title: "Total Talent - Staffing Platform",
+  description: "Secure and manage your staffing with Total Talent",
   icons: {
     icon: "/logo-lock.png",
     apple: "/logo-lock.png",
