@@ -16,7 +16,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import Image from "next/image"
 import { useTranslations, useLocale } from "next-intl"
@@ -54,65 +53,51 @@ export function AuthForm({ type }: AuthFormProps) {
     setIsLoading(true)
 
     try {
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const emailRedirectTo = `${origin}/${locale}`;
-
-      console.log('Auth redirect URLs:', {
-        origin,
-        locale,
-        emailRedirectTo,
-        currentUrl: window.location.href
-      });
-
       if (type === "register") {
-        const { error: signUpError } = await supabase.auth.signUp({
-          email: data.email,
-          password: data.password,
-          options: {
-            data: {
-              full_name: data.fullName,
-            },
-            emailRedirectTo
-          },
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: data.email,
+            password: data.password,
+            fullName: data.fullName,
+            locale,
+          }),
         })
-
-        if (signUpError) throw signUpError
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error ?? "Registration failed")
 
         toast.success("Registration successful! Please check your email to verify your account.")
         router.push(`/${locale}/auth/login`)
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: data.email,
-          password: data.password,
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: data.email,
+            password: data.password,
+          }),
         })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error ?? "Login failed")
 
-        if (signInError) throw signInError
-        console.log("Sign in successful!")
+        window.dispatchEvent(new Event('auth-changed'))
         toast.success("Login successful!")
 
-        // Check if user has any assets
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: assets, error: assetsError } = await supabase
-            .from('digital_assets')
-            .select('id')
-            .eq('user_id', user.id)
-            .limit(1);
-
-          if (assetsError) {
-            console.error('Error checking assets:', assetsError);
-            router.push(`/${locale}/dashboard`);
-            return;
-          }
-
-          console.log("Assets in auth form:", assets);
-          // If user has no assets, redirect to wizard
-          if (!assets || assets.length === 0) {
-            router.push(`/${locale}/wizard`);
+        // Check if user has any assets via API
+        try {
+          const res = await fetch('/api/assets');
+          if (res.ok) {
+            const assets = await res.json();
+            if (!assets || assets.length === 0) {
+              router.push(`/${locale}/wizard`);
+            } else {
+              router.push(`/${locale}/dashboard`);
+            }
           } else {
             router.push(`/${locale}/dashboard`);
           }
-        } else {
+        } catch {
           router.push(`/${locale}/dashboard`);
         }
       }
@@ -125,31 +110,49 @@ export function AuthForm({ type }: AuthFormProps) {
   }
 
   async function handleGoogleSignIn() {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const redirectTo = `${origin}/${locale}/auth/callback`;
-
-    console.log('Google OAuth redirect:', redirectTo);
-
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/auth/oauth/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'google',
+          locale,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.url) {
+        throw new Error(result.error ?? 'Failed to start Google login');
       }
-    });
+
+      window.location.href = result.url;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "An error occurred");
+      setIsLoading(false);
+    }
   }
 
   async function handleAppleSignIn() {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const redirectTo = `${origin}/${locale}/auth/callback`;
-
-    console.log('Apple OAuth redirect:', redirectTo);
-
-    await supabase.auth.signInWithOAuth({
-      provider: "apple",
-      options: {
-        redirectTo
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/auth/oauth/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'apple',
+          locale,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.url) {
+        throw new Error(result.error ?? 'Failed to start Apple login');
       }
-    });
+
+      window.location.href = result.url;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "An error occurred");
+      setIsLoading(false);
+    }
   }
 
   const appleButtonUrl =
@@ -158,7 +161,7 @@ export function AuthForm({ type }: AuthFormProps) {
       : 'https://appleid.cdn-apple.com/appleid/button?height=38&width=300&color=black';
 
   return (
-    <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+    <div className="mx-auto p-4 flex w-full flex-col justify-center space-y-6 sm:w-[350px] rounded-lg ">
       <div className="flex flex-col space-y-2 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
           {type === "login" ? t("welcome") : t("createAnAccount")}
@@ -201,7 +204,7 @@ export function AuthForm({ type }: AuthFormProps) {
           <span className="w-full border-t" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">or</span>
+          <span className="bg-background px-2 text-muted-foreground">{t("or")}</span>
         </div>
       </div>
 
@@ -283,9 +286,9 @@ export function AuthForm({ type }: AuthFormProps) {
       </p>
 
       <p className="px-8 text-center text-xs text-muted-foreground">
-        Versión 1.0.2
+        {t("version")} 2.2.0
         <br />
-        Copyright © 2025
+        Copyright © 2026
       </p>
     </div>
   )

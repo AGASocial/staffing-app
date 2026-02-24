@@ -28,13 +28,21 @@ import {
   BillingError,
   SubscriptionNotFoundError,
   PlanNotFoundError,
+  PaymentGatewayError,
 } from './types';
 
 export class BillingService {
   constructor(
     private supabase: SupabaseClient,
     private gateway: PaymentGateway
-  ) {}
+  ) { }
+
+  /**
+   * Get the name of the current payment provider
+   */
+  getProviderName(): PaymentProvider {
+    return this.gateway.getName();
+  }
 
   /**
    * Get all available billing plans
@@ -526,17 +534,39 @@ export class BillingService {
     }
 
     // Update via gateway (pass Stripe price ID, not our internal plan ID)
-    const result = await this.gateway.updateSubscription(subscription.provider_subscription_id, {
-      planId: stripePriceId,
-      cancelAtPeriodEnd,
-    });
+    let result;
+    try {
+      result = await this.gateway.updateSubscription(subscription.provider_subscription_id, {
+        planId: stripePriceId,
+        cancelAtPeriodEnd,
+      });
+    } catch (error) {
+      // If we are trying to change plans, we can't bypass the gateway
+      if (planId) {
+        throw error;
+      }
+
+      // If just toggling cancel status (resume/cancel) and gateway doesn't support it (PayU),
+      // we update local state only.
+      if (error instanceof PaymentGatewayError || (error instanceof Error && error.message.includes('not supported'))) {
+        console.warn('Gateway update not supported or failed, proceeding with local update:', error);
+        // Mock result for local update only
+        result = {
+          providerSubscriptionId: subscription.provider_subscription_id,
+          status: subscription.status,
+          currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end as string) : undefined
+        };
+      } else {
+        throw error;
+      }
+    }
 
     // Update database with new values from gateway
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (planId) updates.plan_id = planId;
     if (cancelAtPeriodEnd !== undefined) updates.cancel_at_period_end = cancelAtPeriodEnd;
     // Update the current_period_end with the value from Stripe
-    if (result.currentPeriodEnd) updates.current_period_end = result.currentPeriodEnd.toISOString();
+    if (result && result.currentPeriodEnd) updates.current_period_end = result.currentPeriodEnd.toISOString();
 
     console.log('Updating subscription in database:', {
       subscriptionId,
@@ -571,7 +601,17 @@ export class BillingService {
     }
 
     // Cancel via gateway
-    await this.gateway.cancelSubscription(subscription.provider_subscription_id, atPeriodEnd);
+    try {
+      await this.gateway.cancelSubscription(subscription.provider_subscription_id, atPeriodEnd);
+    } catch (error) {
+      // If the gateway doesn't support cancellation (e.g. PayU), we still want to 
+      // update our local state to stop future renewals/access.
+      if (error instanceof PaymentGatewayError || (error instanceof Error && error.message.includes('not supported'))) {
+        console.warn('Gateway cancellation not supported or failed, proceeding with local cancellation:', error);
+      } else {
+        throw error;
+      }
+    }
 
     // Update database
     const updates: Record<string, unknown> = {
@@ -582,6 +622,36 @@ export class BillingService {
     if (!atPeriodEnd) {
       updates.status = 'canceled';
       updates.canceled_at = new Date().toISOString();
+    } else if (!subscription.current_period_end) {
+      // If current_period_end is not set (e.g. PayU subscriptions), compute it
+      // based on the plan's billing interval from the most recent invoice paid_at or creation date
+      const { data: latestInvoice } = await this.supabase
+        .from('billing_invoices')
+        .select('paid_at')
+        .eq('subscription_id', subscriptionId)
+        .eq('status', 'paid')
+        .order('paid_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const { data: plan } = await this.supabase
+        .from('billing_plans')
+        .select('interval')
+        .eq('id', subscription.plan_id)
+        .single();
+
+      const baseDate = latestInvoice?.paid_at
+        ? new Date(latestInvoice.paid_at as string)
+        : new Date(subscription.created_at as string);
+
+      const periodEnd = new Date(baseDate);
+      if (plan?.interval === 'year') {
+        periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+      } else {
+        periodEnd.setMonth(periodEnd.getMonth() + 1);
+      }
+
+      updates.current_period_end = periodEnd.toISOString();
     }
 
     const { error: updateError } = await this.supabase
@@ -756,6 +826,49 @@ export class BillingService {
       if (data.planId) {
         updates.plan_id = data.planId;
       }
+
+      // Compute current_period_start and current_period_end based on the plan interval
+      const paidAt = data.paidAt ? new Date(data.paidAt) : new Date();
+      updates.current_period_start = paidAt.toISOString();
+
+      // Determine the plan interval to calculate period end
+      const planId = data.planId;
+      let interval = 'month'; // default to monthly
+      if (planId) {
+        const { data: plan } = await this.supabase
+          .from('billing_plans')
+          .select('interval')
+          .eq('id', planId)
+          .single();
+        if (plan?.interval) {
+          interval = plan.interval;
+        }
+      } else {
+        // Try to get the interval from the existing subscription's plan
+        const { data: sub } = await this.supabase
+          .from('billing_subscriptions')
+          .select('plan_id')
+          .eq('provider_subscription_id', data.subscriptionId)
+          .single();
+        if (sub?.plan_id) {
+          const { data: plan } = await this.supabase
+            .from('billing_plans')
+            .select('interval')
+            .eq('id', sub.plan_id)
+            .single();
+          if (plan?.interval) {
+            interval = plan.interval;
+          }
+        }
+      }
+
+      const periodEnd = new Date(paidAt);
+      if (interval === 'year') {
+        periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+      } else {
+        periodEnd.setMonth(periodEnd.getMonth() + 1);
+      }
+      updates.current_period_end = periodEnd.toISOString();
 
       await this.supabase
         .from('billing_subscriptions')

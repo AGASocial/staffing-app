@@ -1,16 +1,30 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Outfit } from "next/font/google";
 import "../globals.css";
 import { NextIntlClientProvider } from 'next-intl';
 import { notFound } from 'next/navigation';
-import ClientLayout from "@/components/ClientLayout";
 import ThemeRegistry from "@/components/ThemeRegistry";
+import QueryProvider from "@/components/QueryProvider";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "iablee - Digital Inheritance Platform",
-  description: "Secure and manage your digital legacy with iablee",
+  title: "Total Talent - Staffing Platform",
+  description: "Secure and manage your staffing with Total Talent",
+  icons: {
+    icon: "/logo-lock.png",
+    apple: "/logo-lock.png",
+  },
 };
 
 export default async function RootLayout({
@@ -21,7 +35,7 @@ export default async function RootLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  
+
   let messages;
   try {
     messages = (await import(`../../../messages/${locale}.json`)).default;
@@ -31,14 +45,14 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
-        <ThemeRegistry>
-          <NextIntlClientProvider locale={locale} messages={messages}>
-            <ClientLayout>
+      <body className={`${inter.variable} ${outfit.variable} font-sans antialiased`} suppressHydrationWarning>
+        <QueryProvider>
+          <ThemeRegistry>
+            <NextIntlClientProvider locale={locale} messages={messages}>
               {children}
-            </ClientLayout>
-          </NextIntlClientProvider>
-        </ThemeRegistry>
+            </NextIntlClientProvider>
+          </ThemeRegistry>
+        </QueryProvider>
       </body>
     </html>
   );
