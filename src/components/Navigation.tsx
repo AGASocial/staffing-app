@@ -63,7 +63,7 @@ export default function Navigation({ closeSidebar, collapsed }: { closeSidebar?:
         "pt-4 mt-4 border-t border-border dark:border-white/5 transition-all duration-300",
         collapsed && "border-transparent"
       )}>
-        <ul className="space-y-1">
+        <ul className="space-y-1 hidden">
           <li>
             <Link
               href="/wizard"

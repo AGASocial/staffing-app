@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState, useEffect, useCallback } from "react";
-import { Briefcase, Plus, Users } from "lucide-react";
+import { Briefcase, ChevronDown, ChevronUp, Plus, Trash2, Users } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +29,7 @@ export default function JobsPage() {
     location: "",
     pay_range: "",
     shift: "",
-    interview_questions: "",
+    interview_questions_list: [] as string[],
   });
   const [jobUrl, setJobUrl] = useState("");
   const [extracting, setExtracting] = useState(false);
@@ -76,8 +76,8 @@ export default function JobsPage() {
         return;
       }
       const questions = Array.isArray(data.requirements_json?.interview_questions)
-        ? data.requirements_json.interview_questions.join("\n")
-        : "";
+        ? [...data.requirements_json.interview_questions]
+        : [];
       setForm((f) => ({
         ...f,
         title: data.title ?? f.title,
@@ -85,7 +85,7 @@ export default function JobsPage() {
         location: data.location ?? f.location,
         pay_range: data.pay_range ?? f.pay_range,
         shift: data.shift ?? f.shift ?? "1st_shift",
-        interview_questions: questions || f.interview_questions,
+        interview_questions_list: questions.length > 0 ? questions : f.interview_questions_list,
       }));
       setJobUrl("");
     } catch {
@@ -100,8 +100,7 @@ export default function JobsPage() {
     if (!form.title.trim()) return;
     setSubmitting(true);
     try {
-      const interviewLines = form.interview_questions
-        .split("\n")
+      const interviewLines = form.interview_questions_list
         .map((q) => q.trim())
         .filter(Boolean);
       const requirements_json =
@@ -131,7 +130,7 @@ export default function JobsPage() {
         location: "",
         pay_range: "",
         shift: "",
-        interview_questions: "",
+        interview_questions_list: [],
       });
       setJobUrl("");
       setExtractError(null);
@@ -225,7 +224,7 @@ export default function JobsPage() {
           onClick={() => !submitting && setShowAddModal(false)}
         >
           <div
-            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-xl"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-4 text-xl font-semibold">{t("createJob")}</h2>
@@ -335,21 +334,117 @@ export default function JobsPage() {
                 </Select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">
-                  {t("interviewQuestions")}
-                </label>
-                <Textarea
-                  value={form.interview_questions}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      interview_questions: e.target.value,
-                    }))
-                  }
-                  placeholder={t("interviewQuestionsPlaceholder")}
-                  rows={3}
-                  className="resize-y"
-                />
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-sm font-medium">
+                    {t("interviewQuestions")}
+                  </label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        interview_questions_list: [
+                          ...f.interview_questions_list,
+                          "",
+                        ],
+                      }))
+                    }
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    {t("addQuestion")}
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {form.interview_questions_list.map((q, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 p-2"
+                    >
+                      <div className="flex shrink-0 flex-col gap-0.5 pt-1.5">
+                        <button
+                          type="button"
+                          disabled={i === 0}
+                          onClick={() => {
+                            if (i === 0) return;
+                            setForm((f) => {
+                              const list = [...f.interview_questions_list];
+                              [list[i - 1], list[i]] = [list[i], list[i - 1]];
+                              return { ...f, interview_questions_list: list };
+                            });
+                          }}
+                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent"
+                          title={t("moveUp")}
+                          aria-label={t("moveUp")}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={i === form.interview_questions_list.length - 1}
+                          onClick={() => {
+                            if (i >= form.interview_questions_list.length - 1)
+                              return;
+                            setForm((f) => {
+                              const list = [...f.interview_questions_list];
+                              [list[i], list[i + 1]] = [list[i + 1], list[i]];
+                              return { ...f, interview_questions_list: list };
+                            });
+                          }}
+                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent"
+                          title={t("moveDown")}
+                          aria-label={t("moveDown")}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="mb-1 block text-xs text-muted-foreground">
+                          {t("questionNumber", { n: i + 1 })}
+                        </span>
+                        <div className="flex gap-1">
+                          <Input
+                            value={q}
+                            onChange={(e) =>
+                              setForm((f) => {
+                                const list = [...f.interview_questions_list];
+                                list[i] = e.target.value;
+                                return { ...f, interview_questions_list: list };
+                              })
+                            }
+                            placeholder={t("interviewQuestionsPlaceholder")}
+                            className="min-w-0"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 text-muted-foreground hover:text-destructive"
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                interview_questions_list: f.interview_questions_list.filter(
+                                  (_, j) => j !== i
+                                ),
+                              }))
+                            }
+                            title={t("removeQuestion")}
+                            aria-label={t("removeQuestion")}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {form.interview_questions_list.length === 0 && (
+                    <p className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 px-3 py-4 text-center text-sm text-muted-foreground">
+                      {t("interviewQuestionsPlaceholder")}
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button

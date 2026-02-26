@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { ChevronLeft, UserPlus, Mail, Phone, PhoneCall, ChevronDown, ChevronUp, CheckCircle2, XCircle, MessageSquareQuote, Plus } from "lucide-react";
+import { ChevronLeft, UserPlus, Mail, Phone, PhoneCall, ChevronDown, ChevronUp, CheckCircle2, XCircle, MessageSquareQuote, Plus, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SHIFT_OPTION_KEYS } from "@/constants/shiftOptions";
@@ -41,6 +41,9 @@ export default function JobDetailPage() {
   const [jobInsights, setJobInsights] = useState<LexnetInsight[]>([]);
   const [expandedCallCandidateId, setExpandedCallCandidateId] = useState<string | null>(null);
   const [showAddApplicantModal, setShowAddApplicantModal] = useState(false);
+  const [recordingUrlByCallId, setRecordingUrlByCallId] = useState<Record<string, string>>({});
+  const [recordingLoadingByCallId, setRecordingLoadingByCallId] = useState<Record<string, boolean>>({});
+  const [recordingErrorByCallId, setRecordingErrorByCallId] = useState<Record<string, string>>({});
 
   const digitsOnly = (s: string) => s.replace(/\D/g, "");
   const isPhoneValid = (phone: string) => digitsOnly(phone).length >= 10;
@@ -115,6 +118,36 @@ export default function JobDetailPage() {
       setLoading(false);
     });
   }, [jobId, fetchJob, fetchCandidates, fetchJobInsights]);
+
+  // Fetch recording URL when user expands a call result that has a call_id
+  useEffect(() => {
+    if (!expandedCallCandidateId) return;
+    const insight = jobInsights.find((i) => i.candidate_id === expandedCallCandidateId);
+    const callId = insight?.call_id?.trim();
+    if (!callId) return;
+    if (recordingUrlByCallId[callId] || recordingErrorByCallId[callId] || recordingLoadingByCallId[callId]) return;
+
+    setRecordingLoadingByCallId((prev) => ({ ...prev, [callId]: true }));
+    setRecordingErrorByCallId((prev) => {
+      const next = { ...prev };
+      delete next[callId];
+      return next;
+    });
+    fetch(`/api/calls/${encodeURIComponent(callId)}/recording`, { credentials: "include" })
+      .then((res) => res.json())
+      .then((data: { recording_url?: string; error?: string }) => {
+        setRecordingLoadingByCallId((prev) => ({ ...prev, [callId]: false }));
+        if (data.recording_url) {
+          setRecordingUrlByCallId((prev) => ({ ...prev, [callId]: data.recording_url! }));
+        } else {
+          setRecordingErrorByCallId((prev) => ({ ...prev, [callId]: data.error ?? t("recordingNotAvailable") }));
+        }
+      })
+      .catch(() => {
+        setRecordingLoadingByCallId((prev) => ({ ...prev, [callId]: false }));
+        setRecordingErrorByCallId((prev) => ({ ...prev, [callId]: t("recordingNotAvailable") }));
+      });
+  }, [expandedCallCandidateId, jobInsights, t]);
 
   async function handleAddCandidate(e: React.FormEvent) {
     e.preventDefault();
@@ -385,6 +418,32 @@ export default function JobDetailPage() {
                               {latestInsight.summary || outboundData.call_summary || "—"}
                             </p>
                           </div>
+                          {latestInsight.call_id && (
+                            <div>
+                              <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                <Headphones className="h-4 w-4" />
+                                {t("callRecording")}
+                              </p>
+                              {recordingLoadingByCallId[latestInsight.call_id] && (
+                                <p className="text-sm text-muted-foreground">{t("loadingRecording")}</p>
+                              )}
+                              {recordingErrorByCallId[latestInsight.call_id] && (
+                                <p className="text-sm text-muted-foreground">
+                                  {recordingErrorByCallId[latestInsight.call_id]}
+                                </p>
+                              )}
+                              {recordingUrlByCallId[latestInsight.call_id] && (
+                                <audio
+                                  controls
+                                  src={recordingUrlByCallId[latestInsight.call_id]}
+                                  className="mt-1 w-full max-w-md"
+                                  preload="metadata"
+                                >
+                                  {t("playRecording")}
+                                </audio>
+                              )}
+                            </div>
+                          )}
                           {screeningPairs.length > 0 && (
                             <div>
                               <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

@@ -260,7 +260,7 @@ export default function BillingPage() {
             <h3 className="font-semibold mb-3">{t('planFeatures')}</h3>
             <div className="grid md:grid-cols-2 gap-3 text-sm">
               <div className="flex justify-between p-2 bg-muted rounded">
-                <span>{t('maxAssets')}</span>
+                <span>{t('maxAgents')}</span>
                 <span className="font-semibold">
                   {subscription?.plan?.features?.max_assets === -1
                     ? t('unlimited')
@@ -268,7 +268,7 @@ export default function BillingPage() {
                 </span>
               </div>
               <div className="flex justify-between p-2 bg-muted rounded">
-                <span>{t('maxBeneficiaries')}</span>
+                <span>{t('maxCalls')}</span>
                 <span className="font-semibold">
                   {subscription?.plan?.features?.max_beneficiaries === -1
                     ? t('unlimited')
