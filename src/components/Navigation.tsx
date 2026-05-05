@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
 import { Link } from '@/i18n/navigation';
-import { LayoutDashboard, Wallet, Users, CreditCard, Lightbulb, Wand2, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Wallet, Users, CreditCard, Lightbulb, Wand2, Briefcase, UserSearch, PhoneIncoming } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function Navigation({ closeSidebar, collapsed }: { closeSidebar?: () => void; collapsed?: boolean }) {
@@ -15,6 +15,8 @@ export default function Navigation({ closeSidebar, collapsed }: { closeSidebar?:
     // { href: '/digital-assets', label: t('digitalAssets'), icon: Wallet },
     // { href: '/beneficiaries', label: t('beneficiaries'), icon: Users },
     { href: '/jobs', label: t('jobs'), icon: Briefcase },
+    { href: '/candidates', label: t('candidatesTitle'), icon: UserSearch },
+    { href: '/inbound-calls', label: t('inboundCalls'), icon: PhoneIncoming },
     { href: '/insights', label: t('insights'), icon: Lightbulb },
     { href: '/billing', label: t('billing'), icon: CreditCard },
   ];

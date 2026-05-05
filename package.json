@@ -3,8 +3,8 @@
   "version": "3.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
+    "dev": "NODE_PATH=$(pwd)/node_modules next dev --turbopack",
+    "build": "NODE_PATH=$(pwd)/node_modules next build",
     "start": "next start",
     "lint": "eslint .",
     "test": "jest",
