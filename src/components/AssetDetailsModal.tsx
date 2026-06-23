@@ -100,16 +100,6 @@ export default function AssetDetailsModal({
         return isRequired || isOptional || false;
     };
 
-    useEffect(() => {
-        if (asset && open) {
-            fetchAttachments();
-            setIsEditing(false);
-        } else {
-            setAttachments([]);
-            setIsEditing(false);
-        }
-    }, [asset, open]);
-
     const fetchAttachments = async () => {
         if (!asset) return;
         setLoadingFiles(true);
@@ -125,6 +115,16 @@ export default function AssetDetailsModal({
             setLoadingFiles(false);
         }
     };
+
+    useEffect(() => {
+        if (asset && open) {
+            fetchAttachments();
+            setIsEditing(false);
+        } else {
+            setAttachments([]);
+            setIsEditing(false);
+        }
+    }, [asset, open]);
 
     const handleBeneficiarySelect = async (beneficiaryId: string | null) => {
         if (onAssignBeneficiary) {

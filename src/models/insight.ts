@@ -56,6 +56,42 @@ export type OutboundCallJson = LexnetInsightJson & {
   } | null;
 };
 
+/** Inbound call analysis shape (stored in json). */
+export type InboundCallJson = LexnetInsightJson & {
+  call_summary?: string | null;
+  in_voicemail?: boolean;
+  user_sentiment?: string | null;
+  call_successful?: boolean;
+  custom_analysis_data?: {
+    Client_Name?: unknown;
+    Client_phone?: unknown;
+    Appointment_Date?: unknown;
+    Appointment_Time?: unknown;
+    Reason_Call?: unknown;
+    client_email?: unknown;
+    [key: string]: unknown;
+  } | null;
+};
+
+export interface InboundAppointmentInfo {
+  iso: string | null;
+  dateLabel: string | null;
+  timeLabel: string | null;
+  dateTimeLabel: string | null;
+}
+
+export interface ParsedInboundInsight {
+  callSummary: string | null;
+  callSuccessful: boolean | null;
+  inVoicemail: boolean;
+  userSentiment: string | null;
+  clientName: string | null;
+  clientPhone: string | null;
+  clientEmail: string | null;
+  reasonForCall: string | null;
+  appointment: InboundAppointmentInfo;
+}
+
 export function parseScreeningAnswers(
   raw: string | null | undefined
 ): Array<{ question: string; response: string }> {
@@ -78,6 +114,12 @@ export function parseScreeningAnswers(
 }
 
 export function isOutboundCallJson(json: LexnetInsightJson | null): json is OutboundCallJson {
+  if (!json || typeof json !== "object") return false;
+  const o = json as Record<string, unknown>;
+  return "call_summary" in o || "call_successful" in o || "custom_analysis_data" in o;
+}
+
+export function isInboundCallJson(json: LexnetInsightJson | null): json is InboundCallJson {
   if (!json || typeof json !== "object") return false;
   const o = json as Record<string, unknown>;
   return "call_summary" in o || "call_successful" in o || "custom_analysis_data" in o;
@@ -142,4 +184,165 @@ export function getDispositionVariant(disposition: string | null): DispositionVa
     default:
       return "muted";
   }
+}
+
+function normalizeText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text ? text : null;
+}
+
+function parseAppointmentTime(
+  raw: unknown
+): { hour: number; minute: number; label: string } | null {
+  const text = normalizeText(raw);
+  if (!text) return null;
+  const digits = text.replace(/\D/g, "");
+  if (!digits || digits.length > 4) return null;
+
+  const padded = digits.padStart(4, "0");
+  const hour = Number.parseInt(padded.slice(0, 2), 10);
+  const minute = Number.parseInt(padded.slice(2, 4), 10);
+
+  if (
+    Number.isNaN(hour) ||
+    Number.isNaN(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return null;
+  }
+
+  const time = new Date(2026, 0, 1, hour, minute);
+  return {
+    hour,
+    minute,
+    label: time.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+  };
+}
+
+function parseAppointmentDateFromSummary(summary: string | null): {
+  year: number;
+  monthIndex: number;
+  day: number;
+} | null {
+  if (!summary) return null;
+
+  const match = summary.match(
+    /\b(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+)?(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?,\s+(\d{4})\b/i
+  );
+
+  if (!match) return null;
+
+  const monthNames = [
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+  ];
+
+  const monthIndex = monthNames.indexOf(match[1].toLowerCase());
+  const day = Number.parseInt(match[2], 10);
+  const year = Number.parseInt(match[3], 10);
+
+  if (monthIndex < 0 || Number.isNaN(day) || Number.isNaN(year)) return null;
+
+  return { year, monthIndex, day };
+}
+
+function buildAppointmentInfo(
+  summary: string | null,
+  rawTime: unknown
+): InboundAppointmentInfo {
+  const dateParts = parseAppointmentDateFromSummary(summary);
+  const time = parseAppointmentTime(rawTime);
+
+  if (!dateParts) {
+    return {
+      iso: null,
+      dateLabel: null,
+      timeLabel: time?.label ?? null,
+      dateTimeLabel: time?.label ?? null,
+    };
+  }
+
+  const appointment = new Date(
+    dateParts.year,
+    dateParts.monthIndex,
+    dateParts.day,
+    time?.hour ?? 0,
+    time?.minute ?? 0,
+    0,
+    0
+  );
+
+  const hasTime = Boolean(time);
+
+  return {
+    iso: appointment.toISOString(),
+    dateLabel: appointment.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }),
+    timeLabel: time?.label ?? null,
+    dateTimeLabel: appointment.toLocaleString(undefined, {
+      dateStyle: "medium",
+      ...(hasTime ? { timeStyle: "short" as const } : {}),
+    }),
+  };
+}
+
+function normalizePhoneNumber(value: unknown): string | null {
+  const text = normalizeText(value);
+  if (!text) return null;
+
+  const digits = text.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+
+  return text;
+}
+
+export function parseInboundInsight(
+  json: LexnetInsightJson | null,
+  summaryFallback?: string | null
+): ParsedInboundInsight {
+  const inboundJson = isInboundCallJson(json) ? json : null;
+  const callSummary =
+    normalizeText(inboundJson?.call_summary) ?? normalizeText(summaryFallback) ?? null;
+  const custom = inboundJson?.custom_analysis_data ?? null;
+
+  return {
+    callSummary,
+    callSuccessful:
+      typeof inboundJson?.call_successful === "boolean"
+        ? inboundJson.call_successful
+        : null,
+    inVoicemail: Boolean(inboundJson?.in_voicemail),
+    userSentiment: normalizeText(inboundJson?.user_sentiment),
+    clientName: normalizeText(custom?.Client_Name),
+    clientPhone: normalizePhoneNumber(custom?.Client_phone),
+    clientEmail: normalizeText(custom?.client_email),
+    reasonForCall: normalizeText(custom?.Reason_Call),
+    appointment: buildAppointmentInfo(callSummary, custom?.Appointment_Time),
+  };
 }

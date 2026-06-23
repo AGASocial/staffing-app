@@ -2,11 +2,12 @@
 
 import { useTranslations } from "next-intl";
 import { useState, useEffect, useCallback } from "react";
-import { PhoneIncoming, ChevronDown, ChevronUp, MessageSquareQuote, CheckCircle2, XCircle } from "lucide-react";
+import { PhoneIncoming, ChevronDown, ChevronUp } from "lucide-react";
 import { useSecurity } from "@/context/SecurityContext";
 import { FilterBar } from "@/components/FilterBar";
-import type { LexnetInsight, LexnetInsightJson, OutboundCallJson } from "@/models/insight";
-import { getInsightDisposition, getDispositionVariant, getInterestConfirmed, parseInsightJson, parseScreeningAnswers, isOutboundCallJson } from "@/models/insight";
+import { InboundInsightExpanded, InboundInsightPreview } from "@/components/insights/InboundInsightContent";
+import type { LexnetInsight } from "@/models/insight";
+import { getInsightDisposition, getDispositionVariant, getInterestConfirmed, parseInsightJson } from "@/models/insight";
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -19,37 +20,6 @@ function formatDate(value: string | null): string {
   } catch {
     return value;
   }
-}
-
-function renderJsonValue(value: unknown): React.ReactNode {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
-    return String(value);
-  if (Array.isArray(value))
-    return value.length === 0 ? "[]" : `${value.length} item(s)`;
-  if (typeof value === "object")
-    return Object.keys(value as object).length ? (
-      <pre className="ml-2 rounded bg-muted/30 px-2 py-1 text-xs">
-        {JSON.stringify(value, null, 2)}
-      </pre>
-    ) : "{}";
-  return String(value);
-}
-
-function InsightJsonDetails({ json }: { json: LexnetInsightJson }) {
-  if (typeof json !== "object" || json === null || Array.isArray(json)) return null;
-  const entries = Object.entries(json).filter(([, v]) => v !== undefined && v !== null);
-  if (entries.length === 0) return null;
-  return (
-    <dl className="grid gap-2 text-sm">
-      {entries.map(([key, value]) => (
-        <div key={key} className="flex flex-col gap-0.5">
-          <dt className="font-medium capitalize text-muted-foreground">{key}</dt>
-          <dd className="text-foreground">{renderJsonValue(value)}</dd>
-        </div>
-      ))}
-    </dl>
-  );
 }
 
 export default function InboundCallsPage() {
@@ -94,10 +64,11 @@ export default function InboundCallsPage() {
   }, []);
 
   useEffect(() => {
-    if (!locked && !securityLoading) {
-      setLoading(true);
-      fetchInsights();
-    }
+    if (locked || securityLoading) return;
+    const timeoutId = window.setTimeout(() => {
+      void fetchInsights();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [fetchInsights, locked, securityLoading]);
 
   return (
@@ -148,13 +119,20 @@ export default function InboundCallsPage() {
           <div className="space-y-3">
             {filteredInsights.map((row, index) => {
               const parsedJson = parseInsightJson(row.json);
-              const isOutbound = row.direction?.toLowerCase() === "outbound";
-              const outboundData = isOutbound && isOutboundCallJson(parsedJson) ? (parsedJson as OutboundCallJson) : null;
-              const screeningPairs = outboundData
-                ? parseScreeningAnswers(outboundData.custom_analysis_data?.screening_answers_json)
-                : [];
-              const disposition = getInsightDisposition(parsedJson);
+              const disposition = row.disposition ?? getInsightDisposition(parsedJson);
               const interestConfirmed = getInterestConfirmed(parsedJson);
+              const dispositionLabel = disposition
+                ? t(`dispositions.${String(disposition).toUpperCase().replace(/-/g, "_")}`) || disposition
+                : null;
+              const variantClasses: Record<string, string> = {
+                success: "border-green-500/30 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 dark:border-green-500/30",
+                info: "border-blue-500/30 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500/30",
+                warning: "border-amber-500/30 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-500/30",
+                muted: "border-border bg-muted text-muted-foreground",
+              };
+              const dispositionBadgeClassName = disposition
+                ? variantClasses[getDispositionVariant(disposition)] ?? variantClasses.muted
+                : variantClasses.muted;
 
               return (
                 <div
@@ -174,109 +152,15 @@ export default function InboundCallsPage() {
                       if (e.key === "Enter" || e.key === " ")
                         setExpandedId(expandedId === row.id ? null : row.id);
                     }}
-                  >
+                    >
                     <div className="min-w-0 flex-1 space-y-1">
-                      {outboundData ? (
-                        <>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {typeof outboundData.call_successful === "boolean" && (
-                              <span
-                                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                                  outboundData.call_successful
-                                    ? "border-green-500/30 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 dark:border-green-500/30"
-                                    : "border-red-500/30 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 dark:border-red-500/30"
-                                }`}
-                              >
-                                {outboundData.call_successful ? (
-                                  <><CheckCircle2 className="h-3.5 w-3.5" /> {t("callSuccessful")}</>
-                                ) : (
-                                  <><XCircle className="h-3.5 w-3.5" /> {t("callUnsuccessful")}</>
-                                )}
-                              </span>
-                            )}
-                            {(row.disposition ?? outboundData.disposition) && (() => {
-                              const disp = row.disposition ?? outboundData.disposition ?? "";
-                              const variant = getDispositionVariant(disp);
-                              const variantClasses: Record<string, string> = {
-                                success: "border-green-500/30 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 dark:border-green-500/30",
-                                info: "border-blue-500/30 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500/30",
-                                warning: "border-amber-500/30 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-500/30",
-                                muted: "border-border bg-muted text-muted-foreground",
-                              };
-                              const dispositionKey = String(disp).toUpperCase().replace(/-/g, "_");
-                              const label = t(`dispositions.${dispositionKey}`) || disp;
-                              return (
-                                <span key="disposition" className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${variantClasses[variant] ?? variantClasses.muted}`}>
-                                  {t("disposition")}: {label}
-                                </span>
-                              );
-                            })()}
-                            {outboundData.user_sentiment && (
-                              <span
-                                className={
-                                  String(outboundData.user_sentiment).toLowerCase() === "positive"
-                                    ? "rounded-full border border-green-500/30 bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300 dark:border-green-500/30"
-                                    : "rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
-                                }
-                              >
-                                {t("sentiment")}: {String(outboundData.user_sentiment)}
-                              </span>
-                            )}
-                            {outboundData.in_voicemail && (
-                              <span className="rounded-full border border-amber-500/30 bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                                {t("voicemail")}
-                              </span>
-                            )}
-                          </div>
-                          {(row.summary || outboundData.call_summary) && (
-                            <p className="line-clamp-2 font-medium text-foreground">
-                              {row.summary || outboundData.call_summary || ""}
-                            </p>
-                          )}
-                          {screeningPairs.length > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              {t("screeningAnswers")}: {screeningPairs.length} {t("question").toLowerCase()}(s)
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {disposition && (() => {
-                              const variant = getDispositionVariant(disposition);
-                              const variantClasses: Record<string, string> = {
-                                success: "border-green-500/30 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 dark:border-green-500/30",
-                                info: "border-blue-500/30 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500/30",
-                                warning: "border-amber-500/30 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-500/30",
-                                muted: "border-border bg-muted text-muted-foreground",
-                              };
-                              const dispositionKey = disposition.toUpperCase().replace(/-/g, "_");
-                              const label = t(`dispositions.${dispositionKey}`) || disposition;
-                              return (
-                                <span key="disposition" className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${variantClasses[variant] ?? variantClasses.muted}`}>
-                                  {t("disposition")}: {label}
-                                </span>
-                              );
-                            })()}
-                            {interestConfirmed !== null && (
-                              <span
-                                className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                                  interestConfirmed
-                                    ? "border-green-500/30 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 dark:border-green-500/30"
-                                    : "border-border bg-muted text-muted-foreground"
-                                }`}
-                              >
-                                {t("interestConfirmed")}: {interestConfirmed ? t("yes") : t("no")}
-                              </span>
-                            )}
-                          </div>
-                          {row.summary && (
-                            <p className="line-clamp-2 font-medium text-foreground">
-                              {row.summary}
-                            </p>
-                          )}
-                        </>
-                      )}
+                      <InboundInsightPreview
+                        row={row}
+                        parsedJson={parsedJson}
+                        interestConfirmed={interestConfirmed}
+                        dispositionLabel={dispositionLabel}
+                        dispositionBadgeClassName={dispositionBadgeClassName}
+                      />
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         {row.insight_id && (
                           <span title={row.insight_id}>
@@ -307,57 +191,7 @@ export default function InboundCallsPage() {
                   </div>
                   {expandedId === row.id && (
                     <div className="border-t border-border/50 bg-muted/20 px-4 py-4 space-y-4">
-                      {outboundData ? (
-                        <>
-                          <div>
-                            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              <MessageSquareQuote className="h-4 w-4" />
-                              {t("outboundCallSummary")}
-                            </p>
-                            <p className="whitespace-pre-wrap text-sm text-foreground">
-                              {row.summary || outboundData.call_summary || "—"}
-                            </p>
-                          </div>
-                          {screeningPairs.length > 0 && (
-                            <div>
-                              <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                {t("screeningAnswers")}
-                              </p>
-                              <div className="space-y-3">
-                                {screeningPairs.map((pair, i) => (
-                                  <div
-                                    key={i}
-                                    className="rounded-xl border border-border/50 bg-background p-3 shadow-sm"
-                                  >
-                                    <p className="mb-1.5 text-xs font-semibold text-muted-foreground">
-                                      {t("question")} {i + 1}
-                                    </p>
-                                    <p className="mb-2 text-sm font-medium text-foreground">
-                                      {pair.question}
-                                    </p>
-                                    <p className="text-xs font-semibold text-muted-foreground">
-                                      {t("response")}
-                                    </p>
-                                    <p className="mt-0.5 text-sm text-foreground">
-                                      {pair.response || "—"}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        parsedJson &&
-                        Object.keys(parsedJson).length > 0 && (
-                          <div>
-                            <p className="mb-2 text-xs font-semibold text-muted-foreground">
-                              {t("insightDetails")}
-                            </p>
-                            <InsightJsonDetails json={parsedJson} />
-                          </div>
-                        )
-                      )}
+                      <InboundInsightExpanded row={row} parsedJson={parsedJson} />
                     </div>
                   )}
                 </div>

@@ -28,11 +28,6 @@ export default function PaymentMethodsList() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchPaymentMethods();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const fetchPaymentMethods = async () => {
     try {
       const response = await fetch('/api/billing/payment-methods', {
@@ -49,6 +44,11 @@ export default function PaymentMethodsList() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchPaymentMethods();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleDelete = async (paymentMethodId: string) => {
     if (!confirm(t('confirmDeletePaymentMethod'))) return;

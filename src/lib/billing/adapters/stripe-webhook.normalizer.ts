@@ -23,7 +23,7 @@ export class StripeWebhookNormalizer implements WebhookNormalizer {
     }
 
     this.stripe = new Stripe(secretKey, {
-      apiVersion: '2025-09-30.clover',
+      apiVersion: '2025-10-29.clover',
       typescript: true,
     });
   }

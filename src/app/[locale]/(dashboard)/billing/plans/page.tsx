@@ -42,12 +42,6 @@ export default function PlansPage() {
   const [subscribing, setSubscribing] = useState<string | null>(null);
   const [currentSubscription, setCurrentSubscription] = useState<SubscriptionWithPlan | null>(null);
 
-  useEffect(() => {
-    fetchPlans();
-    fetchCurrentSubscription();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const fetchCurrentSubscription = async () => {
     try {
       const response = await fetch('/api/billing/subscriptions', {
@@ -77,6 +71,12 @@ export default function PlansPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchPlans();
+    fetchCurrentSubscription();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubscribe = async (planId: string) => {
     setSubscribing(planId);

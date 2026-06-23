@@ -2,10 +2,11 @@
 
 import { useTranslations } from "next-intl";
 import { useState, useEffect, useCallback } from "react";
-import { Lightbulb, ChevronDown, ChevronUp, PhoneOutgoing, MessageSquareQuote, CheckCircle2, XCircle } from "lucide-react";
+import { Lightbulb, ChevronDown, ChevronUp, MessageSquareQuote, CheckCircle2, XCircle } from "lucide-react";
 import { useSecurity } from "@/context/SecurityContext";
 import { FilterBar } from "@/components/FilterBar";
-import type { LexnetInsight, LexnetInsightJson, OutboundCallJson } from "@/models/insight";
+import { InboundInsightExpanded, InboundInsightPreview } from "@/components/insights/InboundInsightContent";
+import type { LexnetInsight, OutboundCallJson } from "@/models/insight";
 import { getInsightDisposition, getDispositionVariant, getInterestConfirmed, parseInsightJson, parseScreeningAnswers, isOutboundCallJson } from "@/models/insight";
 
 type DirectionTab = "inbound" | "outbound";
@@ -21,37 +22,6 @@ function formatDate(value: string | null): string {
   } catch {
     return value;
   }
-}
-
-function renderJsonValue(value: unknown): React.ReactNode {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
-    return String(value);
-  if (Array.isArray(value))
-    return value.length === 0 ? "[]" : `${value.length} item(s)`;
-  if (typeof value === "object")
-    return Object.keys(value as object).length ? (
-      <pre className="ml-2 rounded bg-muted/30 px-2 py-1 text-xs">
-        {JSON.stringify(value, null, 2)}
-      </pre>
-    ) : "{}";
-  return String(value);
-}
-
-function InsightJsonDetails({ json }: { json: LexnetInsightJson }) {
-  if (typeof json !== "object" || json === null || Array.isArray(json)) return null;
-  const entries = Object.entries(json).filter(([, v]) => v !== undefined && v !== null);
-  if (entries.length === 0) return null;
-  return (
-    <dl className="grid gap-2 text-sm">
-      {entries.map(([key, value]) => (
-        <div key={key} className="flex flex-col gap-0.5">
-          <dt className="font-medium capitalize text-muted-foreground">{key}</dt>
-          <dd className="text-foreground">{renderJsonValue(value)}</dd>
-        </div>
-      ))}
-    </dl>
-  );
 }
 
 export default function InsightsPage() {
@@ -101,10 +71,11 @@ export default function InsightsPage() {
   }, []);
 
   useEffect(() => {
-    if (!locked && !securityLoading) {
-      setLoading(true);
-      fetchInsights();
-    }
+    if (locked || securityLoading) return;
+    const timeoutId = window.setTimeout(() => {
+      void fetchInsights();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [fetchInsights, locked, securityLoading]);
 
   return (
@@ -187,8 +158,20 @@ export default function InsightsPage() {
               const screeningPairs = outboundData
                 ? parseScreeningAnswers(outboundData.custom_analysis_data?.screening_answers_json)
                 : [];
-              const disposition = getInsightDisposition(parsedJson);
+              const disposition = row.disposition ?? getInsightDisposition(parsedJson);
               const interestConfirmed = getInterestConfirmed(parsedJson);
+              const dispositionLabel = disposition
+                ? t(`dispositions.${String(disposition).toUpperCase().replace(/-/g, "_")}`) || disposition
+                : null;
+              const variantClasses: Record<string, string> = {
+                success: "border-green-500/30 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 dark:border-green-500/30",
+                info: "border-blue-500/30 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500/30",
+                warning: "border-amber-500/30 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-500/30",
+                muted: "border-border bg-muted text-muted-foreground",
+              };
+              const dispositionBadgeClassName = disposition
+                ? variantClasses[getDispositionVariant(disposition)] ?? variantClasses.muted
+                : variantClasses.muted;
 
               return (
               <div
@@ -278,42 +261,13 @@ export default function InsightsPage() {
                         )}
                       </>
                     ) : (
-                      <>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {disposition && (() => {
-                            const variant = getDispositionVariant(disposition);
-                            const variantClasses: Record<string, string> = {
-                              success: "border-green-500/30 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 dark:border-green-500/30",
-                              info: "border-blue-500/30 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500/30",
-                              warning: "border-amber-500/30 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-500/30",
-                              muted: "border-border bg-muted text-muted-foreground",
-                            };
-                            const dispositionKey = disposition.toUpperCase().replace(/-/g, "_");
-                            const label = t(`dispositions.${dispositionKey}`) || disposition;
-                            return (
-                              <span key="disposition" className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${variantClasses[variant] ?? variantClasses.muted}`}>
-                                {t("disposition")}: {label}
-                              </span>
-                            );
-                          })()}
-                          {interestConfirmed !== null && (
-                            <span
-                              className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                                interestConfirmed
-                                  ? "border-green-500/30 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 dark:border-green-500/30"
-                                  : "border-border bg-muted text-muted-foreground"
-                              }`}
-                            >
-                              {t("interestConfirmed")}: {interestConfirmed ? t("yes") : t("no")}
-                            </span>
-                          )}
-                        </div>
-                        {row.summary && (
-                          <p className="line-clamp-2 font-medium text-foreground">
-                            {row.summary}
-                          </p>
-                        )}
-                      </>
+                      <InboundInsightPreview
+                        row={row}
+                        parsedJson={parsedJson}
+                        interestConfirmed={interestConfirmed}
+                        dispositionLabel={dispositionLabel}
+                        dispositionBadgeClassName={dispositionBadgeClassName}
+                      />
                     )}
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       {row.insight_id && (
@@ -386,15 +340,7 @@ export default function InsightsPage() {
                         )}
                       </>
                     ) : (
-                      parsedJson &&
-                      Object.keys(parsedJson).length > 0 && (
-                        <div>
-                          <p className="mb-2 text-xs font-semibold text-muted-foreground">
-                            {t("insightDetails")}
-                          </p>
-                          <InsightJsonDetails json={parsedJson} />
-                        </div>
-                      )
+                      <InboundInsightExpanded row={row} parsedJson={parsedJson} />
                     )}
                   </div>
                 )}

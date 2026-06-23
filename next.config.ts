@@ -39,9 +39,12 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Turbopack configuration
   turbopack: {
+    // Pin root to this app so module resolution uses staffing-app/node_modules
+    // (avoids wrong root when the dev proxy runs from a parent directory)
+    root: appRoot,
     resolveAlias: {
       '@/*': ['./src/*'],
-      // Resolve tailwindcss from app root so it works when bundler context is parent dir (e.g. proxy)
+      // Resolve from app root when bundler context is a parent dir (e.g. proxy)
       tailwindcss: path.join(appRoot, 'node_modules/tailwindcss'),
       '@tailwindcss/postcss': path.join(appRoot, 'node_modules/@tailwindcss/postcss'),
     },
@@ -52,6 +55,7 @@ const nextConfig: NextConfig = {
     config.resolve.alias ??= {};
     (config.resolve.alias as Record<string, string>)['tailwindcss'] = path.join(appRoot, 'node_modules/tailwindcss');
     (config.resolve.alias as Record<string, string>)['@tailwindcss/postcss'] = path.join(appRoot, 'node_modules/@tailwindcss/postcss');
+    (config.resolve.alias as Record<string, string>)['next-intl'] = path.join(appRoot, 'node_modules/next-intl');
     return config;
   },
 };

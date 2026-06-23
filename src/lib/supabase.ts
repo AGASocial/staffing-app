@@ -62,6 +62,7 @@ export type Database = {
           security_pin_hash?: string | null;
           security_pin_updated_at?: string | null;
         };
+        Relationships: [];
       };
       digital_assets: {
         Row: {
@@ -115,6 +116,7 @@ export type Database = {
           created_at?: string | null;
           updated_at?: string | null;
         };
+        Relationships: [];
       };
       beneficiaries: {
         Row: {
@@ -162,6 +164,7 @@ export type Database = {
           created_at?: string | null;
           updated_at?: string | null;
         };
+        Relationships: [];
       };
       staffing_voice_insights: {
         Row: {
@@ -203,6 +206,7 @@ export type Database = {
           candidate_id?: string | null;
           call_id?: string | null;
         };
+        Relationships: [];
       };
       billing_plans: {
         Row: {
@@ -238,6 +242,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       billing_subscriptions: {
         Row: {
@@ -285,6 +290,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       billing_payment_methods: {
         Row: {
@@ -329,6 +335,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       billing_invoices: {
         Row: {
@@ -373,6 +380,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       billing_webhook_events: {
         Row: {
@@ -408,6 +416,7 @@ export type Database = {
           handled_at?: string | null;
           error?: string | null;
         };
+        Relationships: [];
       };
       asset_types: {
         Row: {
@@ -455,6 +464,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       asset_type_billing_plans: {
         Row: {
@@ -475,6 +485,7 @@ export type Database = {
           billing_plan_id?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
       staffing_jobs: {
         Row: {
@@ -531,6 +542,7 @@ export type Database = {
           created_at?: string | null;
           updated_at?: string | null;
         };
+        Relationships: [];
       };
       staffing_candidates: {
         Row: {
@@ -593,6 +605,7 @@ export type Database = {
           created_at?: string | null;
           updated_at?: string | null;
         };
+        Relationships: [];
       };
       staffing_applications: {
         Row: {
@@ -628,7 +641,12 @@ export type Database = {
           created_at?: string | null;
           updated_at?: string | null;
         };
+        Relationships: [];
       };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }; 
